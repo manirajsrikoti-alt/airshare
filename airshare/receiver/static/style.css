@@ -106,6 +106,47 @@ header {
     margin-top: 4px;
 }
 
+.pairing-info {
+    margin-bottom: 24px;
+}
+
+.pairing-info h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pairing-info .pin {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 8px;
+    color: var(--text);
+    margin: 4px 0;
+}
+
+.pairing-info h4 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-top: 12px;
+}
+
+.peers-list .empty {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.peer-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 14px;
+    color: var(--text);
+}
+
 .transfer-area {
     background: var(--surface);
     border: 1px solid var(--border);

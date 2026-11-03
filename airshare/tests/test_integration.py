@@ -30,6 +30,24 @@ def make_test_image_bytes(width=1920, height=1080, color=(100, 150, 200)):
     return buf.getvalue()
 
 
+def pair_and_get_headers(client):
+    """Pair a test device with the receiver and return auth headers."""
+    resp = client.post("/api/pair", json={
+        "pin": "123456",
+        "device_id": "integration-test-device",
+        "device_name": "Integration Test",
+    })
+    assert resp.status_code == 200
+    return {"X-AirShare-Token": resp.get_json()["token"]}
+
+
+def isolate_pairing(srv_mod, tmpdir):
+    """Point the server's pairing store at a temp file with a known PIN."""
+    from airshare.shared.pairing import PairingStore
+    srv_mod.pairing = PairingStore(os.path.join(tmpdir, "peers.json"))
+    srv_mod._pin = "123456"
+
+
 class TestEndToEndFlow:
     """Full end-to-end flow tests using the real Flask test client."""
 
@@ -55,8 +73,22 @@ class TestEndToEndFlow:
         from airshare.receiver import server as srv_mod
         srv_mod.connected_senders.clear()
 
+        # Isolate pairing state and pair a test device
+        isolate_pairing(srv_mod, self.tmpdir)
+
         self.client = self.app.test_client()
         self.storage = storage
+        self.headers = pair_and_get_headers(self.client)
+
+        # Inject the auth header into every /api/upload call
+        original_post = self.client.post
+        def _authed_post(path, *args, **kwargs):
+            if path == "/api/upload":
+                headers = dict(kwargs.get("headers") or {})
+                headers.update(self.headers)
+                kwargs["headers"] = headers
+            return original_post(path, *args, **kwargs)
+        self.client.post = _authed_post
 
     def teardown_method(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
@@ -273,6 +305,10 @@ class TestFullTransferFlow:
         app.config["TESTING"] = True
         client = app.test_client()
 
+        from airshare.receiver import server as srv_mod
+        isolate_pairing(srv_mod, self.tmpdir)
+        headers = pair_and_get_headers(client)
+
         # Step 1: Simulate screenshot capture (create a test image file)
         screenshot_path = os.path.join(self.tmpdir, "capture_test.png")
         img = Image.new("RGB", (1920, 1080), (50, 100, 200))
@@ -292,6 +328,7 @@ class TestFullTransferFlow:
                 "sender_name": "Laptop A",
                 "timestamp": str(time.time()),
             },
+            headers=headers,
             content_type="multipart/form-data",
         )
         assert resp.status_code == 200
@@ -330,6 +367,8 @@ class TestFullTransferFlow:
         srv_mod.connected_senders.clear()
         app.config["TESTING"] = True
         client = app.test_client()
+        isolate_pairing(srv_mod, self.tmpdir)
+        headers = pair_and_get_headers(client)
 
         filenames = []
         for i in range(5):
@@ -343,6 +382,7 @@ class TestFullTransferFlow:
                     "image": (io.BytesIO(buf.getvalue()), f"capture_{i}.png"),
                     "sender_name": "Laptop A",
                 },
+                headers=headers,
                 content_type="multipart/form-data",
             )
             if resp.status_code != 200:

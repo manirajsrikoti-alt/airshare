@@ -8,6 +8,7 @@ from typing import Optional, Callable
 import requests
 
 from airshare import config
+from airshare.shared.pairing import PairingStore
 from airshare.shared.protocol import ReceiverStatus, TransferResponse
 from airshare.receiver.discovery import DiscoveryListener
 
@@ -21,6 +22,9 @@ class NetworkClient:
         self._listener = DiscoveryListener()
         self._connected_receiver: Optional[ReceiverStatus] = None
         self._discovered: dict[str, ReceiverStatus] = {}
+        self._device_id = socket.gethostname()
+        self._pairing = PairingStore()
+        self._token: Optional[str] = self._pairing.get_token(self._device_id)
         self._upload_callback: Optional[Callable] = None
         self._on_discovery_callback: Optional[Callable] = None
 
@@ -87,6 +91,39 @@ class NetworkClient:
     def receiver(self) -> Optional[ReceiverStatus]:
         return self._connected_receiver
 
+    def pair(self, pin: str) -> bool:
+        """Pair with the connected receiver using its 6-digit PIN.
+
+        On success the issued token is stored locally and sent automatically
+        on subsequent uploads. Returns True if pairing succeeded.
+        """
+        if not self._connected_receiver:
+            logger.error("Cannot pair: no receiver connected")
+            return False
+
+        url = f"{self._connected_receiver.url}/api/pair"
+        try:
+            resp = requests.post(
+                url,
+                json={
+                    "pin": pin,
+                    "device_id": self._device_id,
+                    "device_name": socket.gethostname(),
+                },
+                timeout=config.HTTP_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                self._token = resp.json()["token"]
+                self._pairing.add_peer(
+                    self._device_id, socket.gethostname(), self._token,
+                )
+                logger.info("Pairing successful")
+                return True
+            logger.error(f"Pairing failed with status {resp.status_code}")
+        except Exception as e:
+            logger.error(f"Pairing error: {e}")
+        return False
+
     def upload_screenshot(self, file_data: bytes, filename: str,
                           sender_name: str = "Laptop A",
                           callback: Optional[Callable] = None) -> TransferResponse:
@@ -103,10 +140,15 @@ class NetworkClient:
                 "timestamp": str(time.time()),
             }
 
+            headers = {}
+            if self._token:
+                headers["X-AirShare-Token"] = self._token
+
             resp = requests.post(
                 url,
                 files=files,
                 data=data,
+                headers=headers,
                 timeout=config.TRANSFER_TIMEOUT,
             )
 

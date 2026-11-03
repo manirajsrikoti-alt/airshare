@@ -101,9 +101,30 @@
         };
     }
 
+    function updatePeers() {
+        fetch('/api/peers')
+            .then(r => r.json())
+            .then(data => {
+                const list = document.getElementById('peersList');
+                if (!list) return;
+                if (!data.peers || data.peers.length === 0) {
+                    list.innerHTML = '<p class="empty">No paired devices yet</p>';
+                    return;
+                }
+                list.innerHTML = data.peers.map(p => `
+                    <div class="peer-item">
+                        <span class="icon">🔗</span>
+                        <span class="name">${escapeHtml(p.name)}</span>
+                    </div>
+                `).join('');
+            })
+            .catch(() => {});
+    }
+
     // Initial load
     checkLatest();
     updateHistory();
+    updatePeers();
 
     // Start live updates
     connectSSE();

@@ -11,6 +11,7 @@ from airshare import config
 from airshare.receiver.storage import StorageManager
 from airshare.receiver.discovery import DiscoveryBroadcaster
 from airshare.shared.protocol import TransferResponse
+from airshare.shared.pairing import PairingStore, generate_pin, generate_token
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +22,10 @@ app = Flask(
 )
 
 storage = StorageManager()
+pairing = PairingStore()
 connected_senders = set()
 _device_name = "AirShare Receiver"
+_pin = generate_pin()
 _lock = threading.Lock()
 
 
@@ -41,7 +44,37 @@ def _get_local_ip():
 @app.route("/")
 def index():
     """Dashboard page."""
-    return render_template("index.html", device_name=_device_name)
+    return render_template("index.html", device_name=_device_name, pin=_pin)
+
+
+@app.route("/api/pair", methods=["POST"])
+def api_pair():
+    """Pair a sender using the dashboard PIN and issue a per-peer token."""
+    data = request.get_json(silent=True) or {}
+    pin = data.get("pin", "")
+    device_id = data.get("device_id", "")
+    device_name = data.get("device_name", "Unknown")
+
+    if not pin or not device_id:
+        return jsonify({"success": False, "error": "pin and device_id required"}), 400
+
+    if pin != _pin:
+        logger.warning(f"Pairing rejected for {device_name} ({device_id}): wrong PIN")
+        return jsonify({"success": False, "error": "invalid PIN"}), 403
+
+    token = generate_token()
+    pairing.add_peer(device_id, device_name, token)
+    logger.info(f"Paired new peer: {device_name} ({device_id})")
+    return jsonify({"token": token}), 200
+
+
+@app.route("/api/peers")
+def api_peers():
+    """List paired peers (tokens redacted)."""
+    return jsonify({"peers": [
+        {"peer_id": p["peer_id"], "name": p["name"]}
+        for p in pairing.list_peers()
+    ]})
 
 
 @app.route("/api/status")
@@ -50,6 +83,7 @@ def api_status():
     return jsonify({
         "status": "online",
         "device_name": _device_name,
+        "pin": _pin,
         "version": config.VERSION,
         "connected_senders": list(connected_senders),
         "latest_file": storage.latest_filename,
@@ -62,6 +96,9 @@ def api_status():
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
     """Handle screenshot upload from sender."""
+    token = request.headers.get("X-AirShare-Token", "")
+    if not token or not pairing.is_valid_token(token):
+        return jsonify({"success": False, "error": "not paired"}), 401
     try:
         # Check for image file
         if "image" not in request.files:
@@ -156,10 +193,11 @@ def api_events():
 
 def start_receiver(host=None, port=None, device_name=None):
     """Start the receiver server."""
-    global _device_name
+    global _device_name, _pin
     host = host or config.RECEIVER_HOST
     port = port or config.RECEIVER_PORT
     _device_name = device_name or "AirShare Receiver"
+    _pin = generate_pin()
 
     logger.info(f"Starting AirShare Receiver on {host}:{port}")
 
