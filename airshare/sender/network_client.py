@@ -64,7 +64,7 @@ class NetworkClient:
             logger.error(f"Connection failed: {e}")
         return False
 
-    def connect_manual(self, host: str, port: int = 5000) -> bool:
+    def connect_manual(self, host: str, port: int = config.RECEIVER_PORT) -> bool:
         """Manually connect to a receiver by IP."""
         receiver = ReceiverStatus(
             device_name=f"Receiver at {host}",
@@ -72,6 +72,11 @@ class NetworkClient:
             port=port,
         )
         return self.connect_to_receiver(receiver)
+
+    def set_target(self, peer: ReceiverStatus):
+        """Set the default upload target without a connectivity check."""
+        self._connected_receiver = peer
+        logger.info(f"Upload target set: {peer.device_name} at {peer.host}:{peer.port}")
 
     def disconnect(self):
         """Disconnect from receiver."""

@@ -14,7 +14,7 @@ class DiscoveryBroadcaster:
     """Periodically broadcasts receiver presence on the local network via UDP."""
 
     def __init__(self, device_name: str = "AirShare Receiver",
-                 port: int = 5000, host: str = ""):
+                 port: int = config.RECEIVER_PORT, host: str = ""):
         self.status = ReceiverStatus(
             device_name=device_name,
             port=port,

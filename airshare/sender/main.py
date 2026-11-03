@@ -42,9 +42,21 @@ class AirShareSender:
         self._calibration_mode = False
         self._calibration_samples = []
         self._calibration_target = 10
+        self._gestures_enabled = False
 
-    def start(self):
-        """Initialize and run the sender application."""
+    @property
+    def gestures_enabled(self) -> bool:
+        return self._gestures_enabled
+
+    def set_gestures_enabled(self, enabled: bool):
+        """Toggle webcam gesture tracking (OFF by default)."""
+        self._gestures_enabled = bool(enabled)
+        if not self._gestures_enabled:
+            self.gesture.reset()
+        logger.info(f"Gesture tracking: {'ON' if self._gestures_enabled else 'OFF'}")
+
+    def initialize(self) -> bool:
+        """Initialize camera, tracker, and screenshot modules. Returns True on success."""
         logger.info("=" * 50)
         logger.info("AirShare Sender Starting...")
         logger.info("=" * 50)
@@ -53,19 +65,17 @@ class AirShareSender:
         if not self.camera.initialize():
             logger.error("Failed to initialize camera")
             self.state.force_state(SenderState.CAMERA_ERROR)
-            self._show_camera_error()
-            return
+            return False
 
         # Initialize hand tracker
         if not self.tracker.initialize():
             logger.error("Failed to initialize hand tracker")
-            self._show_camera_error()
-            return
+            return False
 
         # Initialize screenshot
         if not self.screenshot.initialize():
             logger.error("Failed to initialize screenshot module")
-            return
+            return False
 
         # Set up state listener
         self.state.on_transition(self._on_state_change)
@@ -78,10 +88,13 @@ class AirShareSender:
             width=self.camera.get_frame_width(),
             height=self.camera.get_frame_height(),
         )
+        return True
 
+    def run(self):
+        """Run the main loop after a successful initialize()."""
         self._running = True
         logger.info("Sender ready. Press ESC to exit.")
-        logger.info("Keyboard shortcuts: S=capture, T=transfer, C=calibrate, D=debug")
+        logger.info("Keyboard shortcuts: S=capture, T=transfer, C=calibrate, D=debug, G=gestures")
 
         try:
             self._main_loop()
@@ -90,6 +103,17 @@ class AirShareSender:
         finally:
             self._cleanup()
 
+    def start(self):
+        """Initialize and run the sender application."""
+        if not self.initialize():
+            self._show_camera_error()
+            return
+        self.run()
+
+    def stop(self):
+        """Request the main loop to exit."""
+        self._running = False
+
     def _main_loop(self):
         """Main processing loop."""
         while self._running:
@@ -97,31 +121,34 @@ class AirShareSender:
             if not ret or frame is None:
                 continue
 
-            # Convert to RGB for MediaPipe
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            if self._gestures_enabled:
+                # Convert to RGB for MediaPipe
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            # Process hand tracking
-            hand_data = self.tracker.process(frame_rgb)
+                # Process hand tracking
+                hand_data = self.tracker.process(frame_rgb)
 
-            # Update hand lost timer
-            if not hand_data.detected:
-                if self._hand_lost_time == 0:
-                    self._hand_lost_time = time.time()
-                elif (time.time() - self._hand_lost_time) * 1000 > config.HAND_LOST_GRACE_MS:
-                    self.gesture.reset()
+                # Update hand lost timer
+                if not hand_data.detected:
+                    if self._hand_lost_time == 0:
+                        self._hand_lost_time = time.time()
+                    elif (time.time() - self._hand_lost_time) * 1000 > config.HAND_LOST_GRACE_MS:
+                        self.gesture.reset()
+                else:
+                    self._hand_lost_time = 0
+
+                # Process gesture (if not in cooldown)
+                if time.time() > self._cooldown_until:
+                    if self.state.ready_for_new_action():
+                        gesture_result = self.gesture.update(hand_data)
+                        self._last_gesture_result = gesture_result
+                        self._handle_gesture(gesture_result)
+                    elif not self.state.is_capturing() and not self.state.is_sending():
+                        gesture_result = self.gesture.update(hand_data)
+                else:
+                    self.gesture.update(hand_data)
             else:
-                self._hand_lost_time = 0
-
-            # Process gesture (if not in cooldown)
-            if time.time() > self._cooldown_until:
-                if self.state.ready_for_new_action():
-                    gesture_result = self.gesture.update(hand_data)
-                    self._last_gesture_result = gesture_result
-                    self._handle_gesture(gesture_result)
-                elif not self.state.is_capturing() and not self.state.is_sending():
-                    gesture_result = self.gesture.update(hand_data)
-            else:
-                self.gesture.update(hand_data)
+                hand_data = HandData()
 
             # Draw overlay
             gesture_type = self._last_gesture_result.gesture if self._last_gesture_result else GestureType.NONE
@@ -168,6 +195,8 @@ class AirShareSender:
             elif key == ord('d') or key == ord('D'):
                 self._debug_mode = not self._debug_mode
                 logger.info(f"Debug mode: {'ON' if self._debug_mode else 'OFF'}")
+            elif key == ord('g') or key == ord('G'):
+                self.set_gestures_enabled(not self._gestures_enabled)
 
     def _handle_gesture(self, result):
         """Handle gesture detection results with state machine."""
@@ -299,6 +328,12 @@ class AirShareSender:
 
     def _show_camera_error(self):
         """Show camera error window."""
+        try:
+            self._render_camera_error()
+        except cv2.error:
+            logger.error("Camera error (cannot display error window - headless?)")
+
+    def _render_camera_error(self):
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         cv2.putText(frame, "CAMERA ERROR", (140, 220),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)

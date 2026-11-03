@@ -4,6 +4,8 @@ import uuid
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
+from airshare import config
+
 
 @dataclass
 class TransferRequest:
@@ -36,7 +38,7 @@ class TransferResponse:
 class ReceiverStatus:
     """Status broadcast by the receiver for discovery."""
     device_name: str = "Laptop B"
-    port: int = 5000
+    port: int = field(default_factory=lambda: config.RECEIVER_PORT)
     host: str = ""
     version: str = "1.0.0"
 
@@ -59,7 +61,7 @@ class ReceiverStatus:
                 data[key] = value
         return cls(
             device_name=data.get("device_name", "Unknown"),
-            port=int(data.get("port", 5000)),
+            port=int(data.get("port", config.RECEIVER_PORT)),
             host=data.get("host", ""),
             version=data.get("version", "1.0.0"),
         )

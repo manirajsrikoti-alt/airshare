@@ -34,6 +34,22 @@
             </div>
         </section>
 
+        <section class="peers-section" id="peersSection">
+            <h3>Discovered Peers</h3>
+            <div class="peers-list" id="discoveredList">
+                <p class="empty">No peers discovered yet</p>
+            </div>
+            <div class="gesture-toggle">
+                <label for="gestureSwitch">Webcam gesture tracking</label>
+                <label class="switch">
+                    <input type="checkbox" id="gestureSwitch">
+                    <span class="slider"></span>
+                </label>
+                <span id="gestureState">OFF</span>
+            </div>
+            <p class="sub" id="modeInfo"></p>
+        </section>
+
         <section class="transfer-area" id="transferArea">
             <div class="transfer-status" id="transferStatus">
                 <div class="placeholder" id="placeholder">

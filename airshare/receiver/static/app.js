@@ -105,18 +105,89 @@
         fetch('/api/peers')
             .then(r => r.json())
             .then(data => {
-                const list = document.getElementById('peersList');
-                if (!list) return;
-                if (!data.peers || data.peers.length === 0) {
-                    list.innerHTML = '<p class="empty">No paired devices yet</p>';
-                    return;
-                }
-                list.innerHTML = data.peers.map(p => `
+                const peers = data.peers || [];
+                const target = data.target;
+
+                const pairedList = document.getElementById('peersList');
+                if (pairedList) {
+                    const paired = peers.filter(p => p.paired);
+                    pairedList.innerHTML = paired.length === 0
+                        ? '<p class="empty">No paired devices yet</p>'
+                        : paired.map(p => `
                     <div class="peer-item">
                         <span class="icon">🔗</span>
                         <span class="name">${escapeHtml(p.name)}</span>
                     </div>
                 `).join('');
+                }
+
+                const list = document.getElementById('discoveredList');
+                if (list) {
+                    list.innerHTML = peers.length === 0
+                        ? '<p class="empty">No peers discovered yet</p>'
+                        : peers.map(p => `
+                    <div class="peer-item${p.peer_id === target ? ' is-target' : ''}">
+                        <span class="icon">${p.paired ? '🔗' : '📡'}</span>
+                        <span class="name">${escapeHtml(p.name)}</span>
+                        <span class="sub">${escapeHtml(p.peer_id)}</span>
+                        ${p.peer_id === target
+                            ? '<span class="badge">✓ Target</span>'
+                            : `<button class="target-btn" data-peer="${escapeHtml(p.peer_id)}">Select as target</button>`}
+                    </div>
+                `).join('');
+                    list.querySelectorAll('.target-btn').forEach(btn => {
+                        btn.addEventListener('click', () => selectTarget(btn.dataset.peer));
+                    });
+                }
+            })
+            .catch(() => {});
+    }
+
+    function selectTarget(peerId) {
+        fetch('/api/target', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ peer_id: peerId }),
+        })
+            .then(r => r.json())
+            .then(() => updatePeers())
+            .catch(() => {});
+    }
+
+    function initGestureSwitch() {
+        const sw = document.getElementById('gestureSwitch');
+        const state = document.getElementById('gestureState');
+        if (!sw) return;
+        fetch('/api/gestures')
+            .then(r => r.json())
+            .then(data => {
+                sw.checked = !!data.enabled;
+                state.textContent = data.enabled ? 'ON' : 'OFF';
+            })
+            .catch(() => {});
+        sw.addEventListener('change', () => {
+            fetch('/api/gestures', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: sw.checked }),
+            })
+                .then(r => r.json())
+                .then(data => {
+                    sw.checked = !!data.enabled;
+                    state.textContent = data.enabled ? 'ON' : 'OFF';
+                })
+                .catch(() => {});
+        });
+    }
+
+    function updateMode() {
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(data => {
+                const el = document.getElementById('modeInfo');
+                if (el && data.mode === 'receiver-only') {
+                    el.textContent = 'Receiver-only mode: camera unavailable, sending disabled.';
+                }
             })
             .catch(() => {});
     }
@@ -125,10 +196,13 @@
     checkLatest();
     updateHistory();
     updatePeers();
+    initGestureSwitch();
+    updateMode();
 
     // Start live updates
     connectSSE();
 
     // Also poll as backup
     setInterval(updateHistory, 5000);
+    setInterval(updatePeers, 5000);
 })();

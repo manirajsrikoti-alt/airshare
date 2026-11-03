@@ -1,5 +1,6 @@
 """Flask-based receiver server for AirShare."""
 import os
+import json
 import logging
 import threading
 import socket
@@ -27,6 +28,56 @@ connected_senders = set()
 _device_name = "AirShare Receiver"
 _pin = generate_pin()
 _lock = threading.Lock()
+
+# --- Unified-app runtime hooks (wired by airshare.app) ---
+_peer_provider = None    # callable() -> list[dict] of discovered receiver peers
+_target_hook = None      # callable(peer_id) called when a target is selected
+_gesture_hook = None     # callable(enabled: bool) toggles sender gesture tracking
+_gestures_enabled = False
+
+TARGET_FILE = os.path.join(os.path.expanduser("~"), ".airshare", "target.json")
+_target_peer_id = None
+_target_loaded = False
+_app_mode = "receiver"
+
+
+def set_mode(mode: str):
+    """Record the app mode ('full' or 'receiver-only') for the dashboard."""
+    global _app_mode
+    _app_mode = mode
+
+
+def configure_runtime(peer_provider=None, target_hook=None, gesture_hook=None):
+    """Wire unified-app hooks for peer listing, target selection, gestures."""
+    global _peer_provider, _target_hook, _gesture_hook
+    _peer_provider = peer_provider
+    _target_hook = target_hook
+    _gesture_hook = gesture_hook
+
+
+def get_target():
+    """Return the persisted target peer_id, or None."""
+    global _target_peer_id, _target_loaded
+    if not _target_loaded:
+        _target_loaded = True
+        try:
+            with open(TARGET_FILE, "r", encoding="utf-8") as f:
+                _target_peer_id = json.load(f).get("target")
+        except (OSError, ValueError):
+            _target_peer_id = None
+    return _target_peer_id
+
+
+def set_target(peer_id):
+    """Persist the selected target peer_id."""
+    global _target_peer_id, _target_loaded
+    _target_peer_id = peer_id
+    _target_loaded = True
+    os.makedirs(os.path.dirname(TARGET_FILE), exist_ok=True)
+    tmp = TARGET_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"target": peer_id}, f)
+    os.replace(tmp, TARGET_FILE)
 
 
 def _get_local_ip():
@@ -70,11 +121,69 @@ def api_pair():
 
 @app.route("/api/peers")
 def api_peers():
-    """List paired peers (tokens redacted)."""
-    return jsonify({"peers": [
-        {"peer_id": p["peer_id"], "name": p["name"]}
-        for p in pairing.list_peers()
-    ]})
+    """List discovered + paired peers and the current upload target."""
+    paired = {p["peer_id"]: p["name"] for p in pairing.list_peers()}
+
+    discovered = []
+    if _peer_provider:
+        try:
+            discovered = _peer_provider() or []
+        except Exception as e:
+            logger.error(f"Peer provider error: {e}")
+
+    peers = []
+    seen = set()
+    for d in discovered:
+        pid = d.get("peer_id")
+        if not pid or pid in seen:
+            continue
+        seen.add(pid)
+        peers.append({
+            "peer_id": pid,
+            "name": d.get("name", pid),
+            "host": d.get("host", ""),
+            "port": d.get("port"),
+            "paired": pid in paired,
+        })
+    for pid, name in paired.items():
+        if pid not in seen:
+            peers.append({"peer_id": pid, "name": name, "host": "", "port": None, "paired": True})
+
+    return jsonify({"peers": peers, "target": get_target()})
+
+
+@app.route("/api/target", methods=["POST"])
+def api_target():
+    """Select the default upload target peer."""
+    data = request.get_json(silent=True) or {}
+    peer_id = data.get("peer_id")
+    if not peer_id:
+        return jsonify({"success": False, "error": "peer_id required"}), 400
+
+    set_target(peer_id)
+    if _target_hook:
+        try:
+            _target_hook(peer_id)
+        except Exception as e:
+            logger.error(f"Target hook error: {e}")
+    logger.info(f"Upload target selected: {peer_id}")
+    return jsonify({"success": True, "target": peer_id}), 200
+
+
+@app.route("/api/gestures", methods=["GET", "POST"])
+def api_gestures():
+    """Get or toggle webcam gesture tracking (OFF by default)."""
+    global _gestures_enabled
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        _gestures_enabled = bool(data.get("enabled", False))
+        if _gesture_hook:
+            try:
+                _gesture_hook(_gestures_enabled)
+            except Exception as e:
+                logger.error(f"Gesture hook error: {e}")
+        logger.info(f"Gesture tracking {'enabled' if _gestures_enabled else 'disabled'} via dashboard")
+    return jsonify({"enabled": _gestures_enabled})
 
 
 @app.route("/api/status")
@@ -83,6 +192,8 @@ def api_status():
     return jsonify({
         "status": "online",
         "device_name": _device_name,
+        "mode": _app_mode,
+        "gestures_enabled": _gestures_enabled,
         "version": config.VERSION,
         "connected_senders": list(connected_senders),
         "latest_file": storage.latest_filename,
