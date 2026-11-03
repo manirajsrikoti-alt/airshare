@@ -1,0 +1,13 @@
+# AirShare
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.calibration.json
+screenshots/
+receiver/received/
+*.egg-info/
+dist/
+build/
+.env
+.DS_Store

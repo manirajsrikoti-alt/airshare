@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirShare — Receiver</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">⬡</span>
+                <h1>AirShare</h1>
+            </div>
+            <div class="status-badge" id="statusBadge">
+                <span class="dot online"></span>
+                <span id="statusText">ONLINE</span>
+            </div>
+        </header>
+
+        <section class="device-info" id="deviceInfo">
+            <h2>Receiver: {{ device_name }}</h2>
+            <p class="sub">Waiting for screenshots...</p>
+        </section>
+
+        <section class="transfer-area" id="transferArea">
+            <div class="transfer-status" id="transferStatus">
+                <div class="placeholder" id="placeholder">
+                    <div class="placeholder-icon">📸</div>
+                    <p>Waiting for transfer</p>
+                    <p class="sub">A sender will appear here when connected</p>
+                </div>
+                <div class="receiving-animation hidden" id="receivingAnim">
+                    <div class="spinner"></div>
+                    <p>RECEIVING...</p>
+                </div>
+                <div class="screenshot-display hidden" id="screenshotDisplay">
+                    <div class="screenshot-wrapper">
+                        <img id="screenshotImage" src="" alt="Received Screenshot">
+                    </div>
+                    <div class="screenshot-meta">
+                        <p class="meta-line">From: <strong id="senderName">—</strong></p>
+                        <p class="meta-line">Time: <strong id="receiveTime">—</strong></p>
+                        <p class="meta-line status-complete">✓ TRANSFER COMPLETE</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="history" id="historySection">
+            <h3>Recent Transfers</h3>
+            <div class="history-list" id="historyList">
+                <p class="empty">No transfers yet</p>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+/* AirShare Receiver Dashboard */
+:root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-hover: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-secondary: #8b949e;
+    --accent: #58a6ff;
+    --accent-glow: rgba(88, 166, 255, 0.15);
+    --success: #3fb950;
+    --success-glow: rgba(63, 185, 80, 0.15);
+    --warning: #d29922;
+    --danger: #f85149;
+    --radius: 12px;
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 20px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo-icon {
+    font-size: 28px;
+    color: var(--accent);
+}
+
+.logo h1 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+}
+
+.dot.online {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.device-info {
+    margin-bottom: 24px;
+}
+
+.device-info h2 {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.sub {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+.transfer-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+    transition: border-color 0.3s ease;
+}
+
+.transfer-area.receiving {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.transfer-area.received {
+    border-color: var(--success);
+    box-shadow: 0 0 20px var(--success-glow);
+}
+
+.transfer-status {
+    width: 100%;
+    text-align: center;
+}
+
+.placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.placeholder-icon {
+    font-size: 64px;
+    opacity: 0.3;
+}
+
+.placeholder p {
+    color: var(--text-secondary);
+    font-size: 16px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.receiving-animation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.receiving-animation p {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--accent);
+    animation: fadeInOut 1.5s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+.screenshot-display {
+    width: 100%;
+    animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.screenshot-wrapper {
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    max-height: 500px;
+}
+
+.screenshot-wrapper img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: contain;
+    max-height: 500px;
+}
+
+.screenshot-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+}
+
+.meta-line {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.meta-line strong {
+    color: var(--text);
+    font-weight: 500;
+}
+
+.status-complete {
+    color: var(--success);
+    font-weight: 500;
+    margin-top: 4px;
+}
+
+.history h3 {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-list .empty {
+    color: var(--text-secondary);
+    font-size: 14px;
+    padding: 16px;
+    text-align: center;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.history-item:hover {
+    background: var(--surface-hover);
+}
+
+.history-item .icon {
+    font-size: 24px;
+}
+
+.history-item .details {
+    flex: 1;
+}
+
+.history-item .details .name {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.history-item .details .time {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.history-item .badge {
+    font-size: 12px;
+    color: var(--success);
+    font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .container {
+        padding: 16px 12px;
+    }
+    .transfer-area {
+        padding: 20px 16px;
+        min-height: 300px;
+    }
+    header {
+        flex-direction: column;
+        gap: 12px;
+    }
+}
