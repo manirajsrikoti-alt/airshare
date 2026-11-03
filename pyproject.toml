@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "airshare"
+name = "airshare-lan"
 version = "1.0.0"
 description = "Huawei-style touchless gesture screenshot & laptop transfer"
 readme = "README.md"
