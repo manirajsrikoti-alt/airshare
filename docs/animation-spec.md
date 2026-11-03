@@ -20,7 +20,8 @@ points for the OpenCV overlay task.
 | `THUMB_SCALE_END` | 0.16 | (measured) resting thumbnail ≈ 15–18 % of screen width, bottom-left, with a ~4 px white border and rounded corners. |
 | `THUMB_DWELL_MS` | 2500 | (measured) thumbnail idles at bottom-left for ~2.5–3 s before dismissing. In AirShare the `FLY_MS` flight replaces this dwell/dismiss (start flight after a short hold of ~400 ms). |
 | `TOAST_MS` | 2000 | (approx) receiver-side arrival toast ("Screenshot received") visible duration. |
-| `TRAVEL_PATH` | screen center → right edge, slight upward arc | (approx) AirShare share direction; Huawei's air-transfer demos show the payload moving toward the adjacent receiving device. Straight line with ~10 % vertical arc reads best at 60 fps overlay. |
+| `HOLD_MS` | 400 | (approx) pause with the thumbnail parked at its dwell position between the shrink and the fly-off. AirShare-specific: shorter than Huawei's 2.5–3 s dwell since we share immediately. |
+| `TRAVEL_PATH` | bottom-left (dwell position) → right edge, slight upward arc | (approx) flight starts where the thumbnail rests after the shrink. Huawei's air-transfer demos show the payload moving toward the adjacent receiving device. Straight line with ~10 % vertical arc reads best at 60 fps overlay. |
 
 ## Storyboard (sender side)
 
@@ -31,8 +32,8 @@ points for the OpenCV overlay task.
 | 2 | Screen freeze | 0 → `GRAB_FREEZE_MS` (400) | Live frame replaced by frozen frame; thin white border appears around the full screen. |
 | 3 | White flash | freeze → +`FLASH_MS` (120) | Full-screen white overlay spikes to ~90 % opacity and fades. Overlaps start of shrink. |
 | 4 | Shrink to thumbnail | freeze → +`SHRINK_MS` (200) | Frozen frame scales 1.00 → 0.16, ease-out, settling at bottom-left with white border + rounded corners. |
-| 5 | Hold | +400 | Thumbnail idles briefly (AirShare: shorter than Huawei's 2.5–3 s dwell, since we share immediately). |
-| 6 | Fly off edge | +`FLY_MS` (450) | Thumbnail travels center → right edge on a slight arc, ease-in (accelerating), fading out in the last ~100 ms. |
+| 5 | Hold | +`HOLD_MS` (400) | Thumbnail idles briefly at the bottom-left dwell position (AirShare: shorter than Huawei's 2.5–3 s dwell, since we share immediately). |
+| 6 | Fly off edge | +`FLY_MS` (450) | Thumbnail lifts off from the bottom-left dwell position and travels to the right edge on a slight upward arc, ease-in (accelerating), fading out in the last ~100 ms. |
 
 ## Storyboard (receiver side)
 
