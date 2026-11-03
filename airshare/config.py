@@ -42,6 +42,22 @@ FLICK_WINDOW_FRAMES = 5               # frames analyzed for flick velocity
 # Movement below this per-frame delta counts as "held still" for CANCEL
 CANCEL_MAX_FRAME_DISPLACEMENT = 0.01
 
+# --- Animation (see docs/animation-spec.md) ---
+GRAB_FREEZE_MS = 200        # spec: 400 measured on EMUI; 200 (>=150) for local detector
+FLASH_MS = 120
+SHRINK_MS = 200
+HOLD_MS = 400
+FLY_MS = 450
+FLY_EASING = (0.55, 0.0, 1.0, 0.45)   # cubic-bezier control points (ease-in)
+RIPPLE_MS = 600
+THUMB_SCALE_START = 1.00
+THUMB_SCALE_END = 0.16
+THUMB_DWELL_MS = 2500
+TOAST_MS = 2000
+THUMB_BORDER_PX = 4         # white border at 1080p reference
+THUMB_CORNER_RADIUS_PCT = 0.02
+FLY_ARC_PCT = 0.10          # vertical arc of travel path, ~10% of frame height
+
 # --- State Machine ---
 COOLDOWN_SECONDS = 1.5
 HAND_LOST_GRACE_MS = 400

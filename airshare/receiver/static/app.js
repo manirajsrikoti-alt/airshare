@@ -78,6 +78,53 @@
             .catch(() => {});
     }
 
+    // Arrival toast per docs/animation-spec.md: slide-in thumbnail,
+    // visible for TOAST_MS (2000), fade in 150 ms / fade out 300 ms.
+    const TOAST_MS = 2000;
+    const TOAST_FADE_IN_MS = 150;
+    const TOAST_FADE_OUT_MS = 300;
+
+    function showArrivalToast(filename) {
+        const old = document.getElementById('arrivalToast');
+        if (old) old.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'arrivalToast';
+        toast.style.cssText = [
+            'position:fixed', 'left:50%', 'bottom:32px',
+            'transform:translate(-50%, 120%)',
+            'display:flex', 'align-items:center', 'gap:10px',
+            'background:rgba(20,20,20,0.92)', 'color:#eee',
+            'padding:10px 16px', 'border-radius:10px',
+            'border:2px solid #fff', 'z-index:9999',
+            'box-shadow:0 4px 18px rgba(0,0,0,0.45)',
+            'transition:transform ' + TOAST_FADE_IN_MS + 'ms ease-out, opacity ' + TOAST_FADE_OUT_MS + 'ms ease-in',
+            'opacity:1', 'pointer-events:none',
+        ].join(';');
+
+        const thumb = document.createElement('img');
+        thumb.src = '/received/' + filename + '?t=' + Date.now();
+        thumb.alt = '';
+        thumb.style.cssText = 'width:56px;height:42px;object-fit:cover;border-radius:4px;border:1px solid #fff';
+        thumb.onerror = function () { thumb.style.display = 'none'; };
+
+        const label = document.createElement('span');
+        label.textContent = 'Screenshot received';
+
+        toast.appendChild(thumb);
+        toast.appendChild(label);
+        document.body.appendChild(toast);
+
+        requestAnimationFrame(() => {
+            toast.style.transform = 'translate(-50%, 0)';
+        });
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translate(-50%, 120%)';
+            setTimeout(() => toast.remove(), TOAST_FADE_OUT_MS);
+        }, TOAST_FADE_IN_MS + TOAST_MS);
+    }
+
     // SSE connection
     function connectSSE() {
         const source = new EventSource('/api/events');
@@ -86,6 +133,7 @@
                 const data = JSON.parse(event.data);
                 if (data.event === 'new_transfer') {
                     showReceiving();
+                    showArrivalToast(data.filename);
                     setTimeout(() => {
                         showScreenshot(data.filename, null, null);
                         updateHistory();

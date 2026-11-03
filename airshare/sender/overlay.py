@@ -6,6 +6,7 @@ import time
 import math
 
 from airshare.shared.models import SenderState, GestureType
+from airshare.sender.animations import AnimationPlayer
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class Overlay:
         self.width = width
         self.height = height
         self._animation_t = 0.0
+        self.animations = AnimationPlayer()
 
     def draw(self, frame: np.ndarray, state: SenderState,
              gesture_type: GestureType, confidence: float,
@@ -132,6 +134,9 @@ class Overlay:
         # Bottom bar for captured screenshot preview
         if has_screenshot and state == SenderState.READY_TO_TRANSFER:
             self._draw_preview_bar(frame)
+
+        # Grab/fly/ripple animation sequences render on top of everything
+        frame = self.animations.draw(frame, time.time())
 
         return frame
 

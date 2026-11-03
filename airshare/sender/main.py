@@ -216,6 +216,8 @@ class AirShareSender:
     def _perform_capture(self):
         """Capture a screenshot."""
         self.state.transition(SenderState.CAPTURING)
+        self.overlay.animations.start_grab(
+            center=(self.overlay.width // 2, self.overlay.height // 2))
         filepath = self.screenshot.capture()
         if filepath:
             self.state.transition(SenderState.CAPTURED)
@@ -238,6 +240,9 @@ class AirShareSender:
             return
 
         self.state.transition(SenderState.SENDING)
+        thumb = self._make_fly_thumbnail()
+        if thumb is not None:
+            self.overlay.animations.start_fly(thumb, edge="right")
         data = self.screenshot.get_screenshot_data()
         if not data:
             logger.error("No screenshot to transfer")
@@ -251,6 +256,20 @@ class AirShareSender:
             file_data, filename, sender_name="AirShare Sender",
             callback=self._on_transfer_complete,
         )
+
+    def _make_fly_thumbnail(self):
+        """Decode the captured screenshot into a thumbnail for the fly animation."""
+        data = self.screenshot.get_screenshot_data()
+        if not data:
+            return None
+        file_data, _ = data
+        buf = np.frombuffer(file_data, dtype=np.uint8)
+        img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+        if img is None:
+            return None
+        tw = max(1, int(self.overlay.width * config.THUMB_SCALE_END))
+        th = max(1, int(self.overlay.height * config.THUMB_SCALE_END))
+        return cv2.resize(img, (tw, th), interpolation=cv2.INTER_AREA)
 
     def _on_transfer_complete(self, success, response):
         """Called when transfer finishes (from background thread)."""
