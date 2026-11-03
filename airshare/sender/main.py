@@ -83,6 +83,9 @@ class AirShareSender:
         # Start discovery
         self.network.start_discovery(self._on_receiver_found)
 
+        # Reconnect automatically when the target receiver drops and reappears
+        self.network.start_reconnect()
+
         self.state.force_state(SenderState.READY)
         self.overlay = Overlay(
             width=self.camera.get_frame_width(),
@@ -375,6 +378,7 @@ class AirShareSender:
         self.camera.release()
         self.tracker.release()
         self.screenshot.release()
+        self.network.stop_reconnect()
         self.network.stop_discovery()
         cv2.destroyAllWindows()
         logger.info("Cleanup complete")

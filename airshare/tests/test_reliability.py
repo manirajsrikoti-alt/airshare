@@ -117,7 +117,7 @@ class TestReconnect:
         client = _make_client()
         target = ReceiverStatus(device_name="B", host="10.0.0.9", port=5077)
         client.set_target(target)
-        client.disconnect()
+        client._connected_receiver = None  # simulate connection drop (not intentional disconnect)
         assert not client.is_connected
 
         fired = []
@@ -135,16 +135,47 @@ class TestReconnect:
     def test_attempt_reconnect_false_when_receiver_absent(self):
         client = _make_client()
         client.set_target(ReceiverStatus(device_name="B", host="10.0.0.10", port=5077))
-        client.disconnect()
+        client._connected_receiver = None  # simulate connection drop
         fired = []
         client.set_reconnect_callback(fired.append)
         assert not client.attempt_reconnect()
         assert fired == []
 
+    def test_disconnect_clears_target_and_stops_reconnect(self):
+        client = _make_client()
+        client.set_target(ReceiverStatus(device_name="B", host="10.0.0.13", port=5077))
+        client.disconnect()
+        fired = []
+        client.set_reconnect_callback(fired.append)
+        # Receiver is discoverable again, but intentional disconnect cleared the target
+        client._listener._receivers["10.0.0.13:5077"] = ReceiverStatus(
+            device_name="B", host="10.0.0.13", port=5077,
+        )
+        assert not client.attempt_reconnect()
+        assert not client.is_connected
+        assert fired == []
+
+    def test_disconnect_stops_reconnect_loop(self, monkeypatch):
+        monkeypatch.setattr(config, "RECONNECT_INTERVAL", 0.05)
+        client = _make_client()
+        client.set_target(ReceiverStatus(device_name="B", host="10.0.0.14", port=5077))
+        client.disconnect()
+        fired = []
+        client.start_reconnect(fired.append)
+        try:
+            client._listener._receivers["10.0.0.14:5077"] = ReceiverStatus(
+                device_name="B", host="10.0.0.14", port=5077,
+            )
+            time.sleep(0.3)
+            assert fired == []
+            assert not client.is_connected
+        finally:
+            client.stop_reconnect()
+
     def test_attempt_reconnect_ignores_stale_entries(self):
         client = _make_client()
         client.set_target(ReceiverStatus(device_name="B", host="10.0.0.11", port=5077))
-        client.disconnect()
+        client._connected_receiver = None  # simulate connection drop
         stale = ReceiverStatus(device_name="B", host="10.0.0.11", port=5077)
         stale.last_seen = time.time() - config.PEER_STALE_TIMEOUT - 1
         client._listener._receivers["10.0.0.11:5077"] = stale
@@ -154,7 +185,7 @@ class TestReconnect:
         monkeypatch.setattr(config, "RECONNECT_INTERVAL", 0.05)
         client = _make_client()
         client.set_target(ReceiverStatus(device_name="B", host="10.0.0.12", port=5077))
-        client.disconnect()
+        client._connected_receiver = None  # simulate connection drop
 
         fired = []
         client.start_reconnect(fired.append)

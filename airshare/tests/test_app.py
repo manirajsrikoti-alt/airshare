@@ -150,6 +150,33 @@ class TestSetTarget:
         assert nc.receiver_name == "Laptop B"
 
 
+class TestSenderReconnectWiring:
+    def _mocked_sender(self):
+        from airshare.sender.main import AirShareSender
+        sender = AirShareSender()
+        sender.camera = mock.Mock()
+        sender.camera.initialize.return_value = True
+        sender.camera.get_frame_width.return_value = 640
+        sender.camera.get_frame_height.return_value = 480
+        sender.tracker = mock.Mock()
+        sender.tracker.initialize.return_value = True
+        sender.screenshot = mock.Mock()
+        sender.screenshot.initialize.return_value = True
+        sender.network = mock.Mock()
+        return sender
+
+    def test_initialize_starts_reconnect(self):
+        sender = self._mocked_sender()
+        assert sender.initialize() is True
+        sender.network.start_reconnect.assert_called_once()
+
+    def test_cleanup_stops_reconnect(self):
+        sender = self._mocked_sender()
+        with mock.patch("cv2.destroyAllWindows"):
+            sender._cleanup()
+        sender.network.stop_reconnect.assert_called_once()
+
+
 class TestSenderGestures:
     def test_gestures_disabled_by_default(self):
         from airshare.sender.main import AirShareSender
