@@ -8,7 +8,7 @@ DEBUG_MODE = os.getenv("AIRSHARE_DEBUG", "0") == "1"
 
 # --- Receiver ---
 RECEIVER_HOST = "0.0.0.0"
-RECEIVER_PORT = int(os.getenv("AIRSHARE_PORT", "5000"))
+RECEIVER_PORT = int(os.getenv("AIRSHARE_PORT", "5077"))  # avoid AirPlay's 5000
 RECEIVER_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "receiver", "received")
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
