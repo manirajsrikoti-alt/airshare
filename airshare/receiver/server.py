@@ -1,6 +1,8 @@
 """Flask-based receiver server for AirShare."""
 import os
+import hmac
 import json
+import functools
 import logging
 import threading
 import socket
@@ -31,9 +33,52 @@ _lock = threading.Lock()
 
 # --- Unified-app runtime hooks (wired by airshare.app) ---
 _peer_provider = None    # callable() -> list[dict] of discovered receiver peers
-_target_hook = None      # callable(peer_id) called when a target is selected
+_target_hook = None      # callable(peer_id) -> bool: True when the target was applied
 _gesture_hook = None     # callable(enabled: bool) toggles sender gesture tracking
+_pair_hook = None        # callable(peer_id, pin) -> bool: pair the sender with a peer
 _gestures_enabled = False
+
+# --- Loopback gating + pairing rate limit ---
+PAIR_MAX_FAILURES = 5        # failed PIN attempts allowed per window per client
+PAIR_FAILURE_WINDOW = 60     # seconds
+_pair_failures = {}          # remote_addr -> [failure timestamps]
+_pair_lock = threading.Lock()
+
+
+def _is_loopback(addr) -> bool:
+    """True when the request originates from this machine."""
+    return bool(addr) and (addr == "::1" or addr.startswith("127."))
+
+
+def _loopback_only(view):
+    """Restrict a dashboard control endpoint to requests from this machine."""
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        if not _is_loopback(request.remote_addr):
+            logger.warning(
+                f"Blocked remote access to {request.path} from {request.remote_addr}"
+            )
+            return jsonify({"success": False, "error": "local access only"}), 403
+        return view(*args, **kwargs)
+    return wrapper
+
+
+def _pair_rate_limited(addr) -> bool:
+    with _pair_lock:
+        now = time.time()
+        fails = [t for t in _pair_failures.get(addr, []) if now - t < PAIR_FAILURE_WINDOW]
+        _pair_failures[addr] = fails
+        return len(fails) >= PAIR_MAX_FAILURES
+
+
+def _record_pair_failure(addr):
+    with _pair_lock:
+        _pair_failures.setdefault(addr, []).append(time.time())
+
+
+def _clear_pair_failures(addr):
+    with _pair_lock:
+        _pair_failures.pop(addr, None)
 
 TARGET_FILE = os.path.join(os.path.expanduser("~"), ".airshare", "target.json")
 _target_peer_id = None
@@ -47,12 +92,26 @@ def set_mode(mode: str):
     _app_mode = mode
 
 
-def configure_runtime(peer_provider=None, target_hook=None, gesture_hook=None):
-    """Wire unified-app hooks for peer listing, target selection, gestures."""
-    global _peer_provider, _target_hook, _gesture_hook
+def configure_runtime(peer_provider=None, target_hook=None, gesture_hook=None,
+                      pair_hook=None):
+    """Wire unified-app hooks for peer listing, target selection, gestures, pairing."""
+    global _peer_provider, _target_hook, _gesture_hook, _pair_hook
     _peer_provider = peer_provider
     _target_hook = target_hook
     _gesture_hook = gesture_hook
+    _pair_hook = pair_hook
+
+
+def get_pin() -> str:
+    """The current pairing PIN (local use only — never serve to LAN clients)."""
+    return _pin
+
+
+def print_pin():
+    """Print the pairing PIN to the terminal so headless users can see it."""
+    msg = f"AirShare pairing PIN: {_pin} (enter it on the sending machine's dashboard)"
+    print(msg, flush=True)
+    logger.info(msg)
 
 
 def get_target():
@@ -94,13 +153,20 @@ def _get_local_ip():
 
 @app.route("/")
 def index():
-    """Dashboard page."""
-    return render_template("index.html", device_name=_device_name, pin=_pin)
+    """Dashboard page. The pairing PIN is only rendered for loopback clients —
+    a LAN snooper browsing the dashboard must not see it."""
+    pin = _pin if _is_loopback(request.remote_addr) else None
+    return render_template("index.html", device_name=_device_name, pin=pin)
 
 
 @app.route("/api/pair", methods=["POST"])
 def api_pair():
     """Pair a sender using the dashboard PIN and issue a per-peer token."""
+    addr = request.remote_addr or ""
+    if _pair_rate_limited(addr):
+        logger.warning(f"Pairing rate-limited for {addr}: too many failed attempts")
+        return jsonify({"success": False, "error": "too many attempts"}), 429
+
     data = request.get_json(silent=True) or {}
     pin = data.get("pin", "")
     device_id = data.get("device_id", "")
@@ -109,10 +175,12 @@ def api_pair():
     if not pin or not device_id:
         return jsonify({"success": False, "error": "pin and device_id required"}), 400
 
-    if pin != _pin:
+    if not hmac.compare_digest(str(pin), str(_pin)):
+        _record_pair_failure(addr)
         logger.warning(f"Pairing rejected for {device_name} ({device_id}): wrong PIN")
         return jsonify({"success": False, "error": "invalid PIN"}), 403
 
+    _clear_pair_failures(addr)
     token = generate_token()
     pairing.add_peer(device_id, device_name, token)
     logger.info(f"Paired new peer: {device_name} ({device_id})")
@@ -143,7 +211,8 @@ def api_peers():
             "name": d.get("name", pid),
             "host": d.get("host", ""),
             "port": d.get("port"),
-            "paired": pid in paired,
+            # Sender-side pairing (we hold a token for them) wins when reported
+            "paired": bool(d.get("paired", pid in paired)),
         })
     for pid, name in paired.items():
         if pid not in seen:
@@ -153,30 +222,40 @@ def api_peers():
 
 
 @app.route("/api/target", methods=["POST"])
+@_loopback_only
 def api_target():
-    """Select the default upload target peer."""
+    """Select the default upload target peer (local dashboard control)."""
     data = request.get_json(silent=True) or {}
     peer_id = data.get("peer_id")
     if not peer_id:
         return jsonify({"success": False, "error": "peer_id required"}), 400
 
-    set_target(peer_id)
     if _target_hook:
         try:
-            _target_hook(peer_id)
+            if _target_hook(peer_id) is False:
+                return jsonify({
+                    "success": False,
+                    "error": "unknown peer (must be discovered or paired)",
+                }), 400
         except Exception as e:
             logger.error(f"Target hook error: {e}")
+            return jsonify({"success": False, "error": "target could not be applied"}), 500
+    set_target(peer_id)
     logger.info(f"Upload target selected: {peer_id}")
     return jsonify({"success": True, "target": peer_id}), 200
 
 
 @app.route("/api/gestures", methods=["GET", "POST"])
+@_loopback_only
 def api_gestures():
-    """Get or toggle webcam gesture tracking (OFF by default)."""
+    """Get or toggle webcam gesture tracking (OFF by default, local control)."""
     global _gestures_enabled
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
-        _gestures_enabled = bool(data.get("enabled", False))
+        enabled = data.get("enabled")
+        if not isinstance(enabled, bool):
+            return jsonify({"success": False, "error": "boolean 'enabled' required"}), 400
+        _gestures_enabled = enabled
         if _gesture_hook:
             try:
                 _gesture_hook(_gestures_enabled)
@@ -184,6 +263,35 @@ def api_gestures():
                 logger.error(f"Gesture hook error: {e}")
         logger.info(f"Gesture tracking {'enabled' if _gestures_enabled else 'disabled'} via dashboard")
     return jsonify({"enabled": _gestures_enabled})
+
+
+@app.route("/api/pair-peer", methods=["POST"])
+@_loopback_only
+def api_pair_peer():
+    """Pair this machine's sender with a discovered peer using its PIN.
+
+    Local dashboard control: the dashboard user enters the PIN shown on the
+    *other* machine; the app-level hook connects and performs the pairing,
+    storing the issued token in the sender's PairingStore."""
+    if not _pair_hook:
+        return jsonify({"success": False, "error": "pairing unavailable (no sender)"}), 503
+
+    data = request.get_json(silent=True) or {}
+    peer_id = data.get("peer_id")
+    pin = data.get("pin")
+    if not peer_id or not pin:
+        return jsonify({"success": False, "error": "peer_id and pin required"}), 400
+
+    try:
+        ok = bool(_pair_hook(peer_id, pin))
+    except Exception as e:
+        logger.error(f"Pair hook error: {e}")
+        return jsonify({"success": False, "error": "pairing failed"}), 500
+
+    if not ok:
+        return jsonify({"success": False, "error": "pairing failed (wrong PIN or peer unreachable)"}), 403
+    logger.info(f"Paired with peer {peer_id} via dashboard")
+    return jsonify({"success": True, "peer_id": peer_id}), 200
 
 
 @app.route("/api/status")
@@ -250,7 +358,7 @@ def api_upload():
 
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": "internal upload error"}), 500
 
 
 @app.route("/api/latest")
@@ -310,6 +418,7 @@ def start_receiver(host=None, port=None, device_name=None):
     _pin = generate_pin()
 
     logger.info(f"Starting AirShare Receiver on {host}:{port}")
+    print_pin()
 
     # Start UDP broadcaster
     broadcaster = DiscoveryBroadcaster(

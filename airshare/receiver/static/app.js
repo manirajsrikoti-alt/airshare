@@ -178,6 +178,13 @@
                         <span class="icon">${p.paired ? '🔗' : '📡'}</span>
                         <span class="name">${escapeHtml(p.name)}</span>
                         <span class="sub">${escapeHtml(p.peer_id)}</span>
+                        ${p.paired
+                            ? '<span class="badge">✓ Paired</span>'
+                            : `<span class="pair-controls">
+                                 <input type="text" class="pin-input" maxlength="6" inputmode="numeric"
+                                        placeholder="PIN" data-peer="${escapeHtml(p.peer_id)}">
+                                 <button class="pair-btn" data-peer="${escapeHtml(p.peer_id)}">Pair</button>
+                               </span>`}
                         ${p.peer_id === target
                             ? '<span class="badge">✓ Target</span>'
                             : `<button class="target-btn" data-peer="${escapeHtml(p.peer_id)}">Select as target</button>`}
@@ -186,7 +193,28 @@
                     list.querySelectorAll('.target-btn').forEach(btn => {
                         btn.addEventListener('click', () => selectTarget(btn.dataset.peer));
                     });
+                    list.querySelectorAll('.pair-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const input = list.querySelector(`.pin-input[data-peer="${btn.dataset.peer}"]`);
+                            pairPeer(btn.dataset.peer, input ? input.value.trim() : '');
+                        });
+                    });
                 }
+            })
+            .catch(() => {});
+    }
+
+    function pairPeer(peerId, pin) {
+        if (!pin) { alert('Enter the 6-digit PIN shown on the peer.'); return; }
+        fetch('/api/pair-peer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ peer_id: peerId, pin: pin }),
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) alert(data.error || 'Pairing failed');
+                updatePeers();
             })
             .catch(() => {});
     }

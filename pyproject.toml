@@ -23,3 +23,6 @@ airshare = "airshare.app:main"
 
 [tool.setuptools.packages.find]
 include = ["airshare*"]
+
+[tool.setuptools.package-data]
+"airshare.receiver" = ["templates/*.html", "static/*.css", "static/*.js"]

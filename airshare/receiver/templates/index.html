@@ -26,8 +26,12 @@
 
         <section class="pairing-info" id="pairingInfo">
             <h3>Pairing PIN</h3>
+            {% if pin %}
             <p class="pin" id="pairingPin">{{ pin }}</p>
             <p class="sub">Enter this PIN on the sender to pair</p>
+            {% else %}
+            <p class="sub" id="pairingPin">The pairing PIN is only shown on this machine's own browser — open the dashboard from the receiver itself, or check its terminal.</p>
+            {% endif %}
             <h4>Paired Devices</h4>
             <div class="peers-list" id="peersList">
                 <p class="empty">No paired devices yet</p>

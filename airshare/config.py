@@ -9,7 +9,7 @@ DEBUG_MODE = os.getenv("AIRSHARE_DEBUG", "0") == "1"
 # --- Receiver ---
 RECEIVER_HOST = "0.0.0.0"
 RECEIVER_PORT = int(os.getenv("AIRSHARE_PORT", "5077"))  # avoid AirPlay's 5000
-RECEIVER_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "receiver", "received")
+RECEIVER_UPLOAD_DIR = os.path.join(os.path.expanduser("~"), ".airshare", "received")
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
 
@@ -19,7 +19,7 @@ DISCOVERY_MESSAGE = "AIRSHARE_RECEIVER"
 DISCOVERY_INTERVAL = 2  # seconds between broadcasts
 
 # --- Sender ---
-SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "screenshots")
+SCREENSHOT_DIR = os.path.join(os.path.expanduser("~"), ".airshare", "screenshots")
 CAMERA_INDEX = 0
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
@@ -52,10 +52,8 @@ FLY_EASING = (0.55, 0.0, 1.0, 0.45)   # cubic-bezier control points (ease-in)
 RIPPLE_MS = 600
 THUMB_SCALE_START = 1.00
 THUMB_SCALE_END = 0.16
-THUMB_DWELL_MS = 2500
 TOAST_MS = 2000
 THUMB_BORDER_PX = 4         # white border at 1080p reference
-THUMB_CORNER_RADIUS_PCT = 0.02
 FLY_ARC_PCT = 0.10          # vertical arc of travel path, ~10% of frame height
 
 # --- State Machine ---
@@ -74,7 +72,5 @@ PEER_STALE_TIMEOUT = 30     # drop discovered receivers not seen for this long
 
 # --- Paths ---
 CALIBRATION_FILE = os.path.join(os.path.dirname(__file__), ".calibration.json")
-
-# Ensure directories exist
-os.makedirs(SCREENSHOT_DIR, exist_ok=True)
-os.makedirs(RECEIVER_UPLOAD_DIR, exist_ok=True)
+# Data directories (SCREENSHOT_DIR, RECEIVER_UPLOAD_DIR) are created lazily
+# by their consumers, not at import time.

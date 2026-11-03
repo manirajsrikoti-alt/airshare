@@ -47,8 +47,12 @@ sender. Open the dashboard printed in the logs
 
 ### Pair once (PIN)
 
-1. On the receiver's dashboard, note the 6-digit pairing PIN shown on the page.
-2. On the sender, select the discovered peer and enter that PIN.
+1. On the machine you want to send *to*, find its 6-digit pairing PIN — it is
+   printed in that machine's terminal at startup and shown on its dashboard
+   **only when opened from that same machine** (it is never served to other
+   LAN clients).
+2. On the sending machine's dashboard, find the peer under *Discovered
+   Peers*, enter the PIN in its row, and click **Pair**.
 3. The receiver issues a per-peer token; from then on transfers between those
    two machines need no further interaction.
 
@@ -71,12 +75,20 @@ Headless machine? Run `airshare --no-camera` for a receiver-only node.
 AirShare is a **LAN tool for trusted home/office networks**, designed against
 casual snooping — not against a determined attacker on your network.
 
-- **PIN pairing:** a 6-digit PIN shown on the receiver's dashboard is required
-  before the first transfer between two machines. There is no open upload
-  endpoint.
+- **PIN pairing:** a 6-digit PIN is required before the first transfer
+  between two machines. There is no open upload endpoint. The PIN is printed
+  to the receiver's terminal and shown on its dashboard only to browsers on
+  the same machine (loopback) — never to LAN clients. PIN guesses are
+  compared in constant time and rate-limited to 5 failures per minute per
+  client.
+- **Loopback-only dashboard controls:** the actions that change state —
+  pairing with a peer, selecting the upload target, toggling gestures — only
+  accept requests from the machine itself (127.0.0.1/::1); remote requests
+  get 403.
 - **Per-peer tokens:** pairing issues a random 128-bit token per peer, sent as
   the `X-AirShare-Token` header on every upload. Tokens are stored in
-  `~/.airshare/peers.json` (mode 600).
+  `~/.airshare/peers.json` (mode 600), keyed by the peer's `host:port` so each
+  receiver keeps its own token.
 - **Known limitation:** dashboard read routes (peer list, gallery) are not
   token-authenticated — anyone on the LAN can view them. Traffic is plain
   HTTP; do not use on untrusted networks.
@@ -110,7 +122,7 @@ Key tunables in `airshare/config.py`:
 
 ```bash
 pip install -e .
-python -m pytest        # 120 tests
+python -m pytest        # 150 tests
 ```
 
 CI runs the suite on Ubuntu and macOS with Python 3.10 and 3.12.

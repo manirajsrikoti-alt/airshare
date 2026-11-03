@@ -24,7 +24,9 @@ class NetworkClient:
         self._discovered: dict[str, ReceiverStatus] = {}
         self._device_id = socket.gethostname()
         self._pairing = PairingStore()
-        self._token: Optional[str] = self._pairing.get_token(self._device_id)
+        # Token for the *current* receiver; the store keys tokens by the
+        # target's host:port so multiple receivers each keep their own token.
+        self._token: Optional[str] = None
         self._upload_callback: Optional[Callable] = None
         self._on_discovery_callback: Optional[Callable] = None
         self._target: Optional[ReceiverStatus] = None
@@ -59,6 +61,16 @@ class NetworkClient:
         with self._lock:
             return list(self._discovered.values())
 
+    @staticmethod
+    def _peer_key(receiver: ReceiverStatus) -> str:
+        """Pairing-store key for a receiver: its host:port."""
+        return f"{receiver.host}:{receiver.port}"
+
+    def _load_token_for(self, receiver: ReceiverStatus):
+        """Refresh the cached token for a (new) connected receiver."""
+        with self._lock:
+            self._token = self._pairing.get_token(self._peer_key(receiver))
+
     def connect_to_receiver(self, receiver: ReceiverStatus) -> bool:
         """Connect to a specific receiver."""
         try:
@@ -67,6 +79,7 @@ class NetworkClient:
                 with self._lock:
                     self._connected_receiver = receiver
                     self._target = receiver
+                self._load_token_for(receiver)
                 logger.info(f"Connected to receiver: {receiver.device_name}")
                 return True
         except Exception as e:
@@ -87,6 +100,7 @@ class NetworkClient:
         with self._lock:
             self._connected_receiver = peer
             self._target = peer
+        self._load_token_for(peer)
         logger.info(f"Upload target set: {peer.device_name} at {peer.host}:{peer.port}")
 
     def disconnect(self):
@@ -95,6 +109,7 @@ class NetworkClient:
         with self._lock:
             self._connected_receiver = None
             self._target = None
+            self._token = None
 
     @property
     def is_connected(self) -> bool:
@@ -140,6 +155,7 @@ class NetworkClient:
             return False
         with self._lock:
             self._connected_receiver = match
+        self._load_token_for(match)
         logger.info(f"Reconnected to receiver: {match.device_name} at {match.host}:{match.port}")
         if self._on_reconnect_callback:
             self._on_reconnect_callback(match)
@@ -203,9 +219,12 @@ class NetworkClient:
                 timeout=config.HTTP_TIMEOUT,
             )
             if resp.status_code == 200:
-                self._token = resp.json()["token"]
+                token = resp.json()["token"]
+                receiver = self.receiver
+                self._token = token
+                # Keyed by the target's host:port so each receiver keeps its own token
                 self._pairing.add_peer(
-                    self._device_id, socket.gethostname(), self._token,
+                    self._peer_key(receiver), receiver.device_name, token,
                 )
                 logger.info("Pairing successful")
                 return True
@@ -248,6 +267,7 @@ class NetworkClient:
         if match:
             with self._lock:
                 self._connected_receiver = match
+            self._load_token_for(match)
             logger.info(f"Re-discovered receiver at {match.host}:{match.port}")
 
     def _post_upload(self, file_data: bytes, filename: str,

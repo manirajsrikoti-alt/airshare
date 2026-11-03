@@ -77,12 +77,6 @@ class GestureResult:
 @dataclass
 class CalibrationData:
     """Calibration statistics for gestures."""
-    capture_avg_displacement: float = 0.0
-    capture_avg_velocity: float = 0.0
-    capture_direction_ratio: float = 0.0
-    transfer_avg_displacement: float = 0.0
-    transfer_avg_velocity: float = 0.0
-    transfer_direction_ratio: float = 0.0
     sample_count: int = 0
     timestamp: float = 0.0
 

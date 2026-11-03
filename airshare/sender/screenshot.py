@@ -50,6 +50,7 @@ class ScreenshotCapture:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             millis = int(time.time() * 1000) % 1000
             filename = f"capture_{timestamp}_{millis:03d}.png"
+            os.makedirs(config.SCREENSHOT_DIR, exist_ok=True)
             filepath = os.path.join(config.SCREENSHOT_DIR, filename)
 
             # Save

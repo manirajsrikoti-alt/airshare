@@ -87,33 +87,65 @@ class AirShareApp:
     # ---- hooks for the receiver server ----
 
     def peer_list(self) -> list:
-        """Discovered receiver peers for GET /api/peers."""
+        """Discovered receiver peers for GET /api/peers (excludes this machine)."""
         if not self.sender:
             return []
+        own_ip = _get_local_ip()
+        paired = self._paired_peer_ids()
         return [
             {
                 "peer_id": f"{r.host}:{r.port}",
                 "name": r.device_name,
                 "host": r.host,
                 "port": r.port,
+                "paired": f"{r.host}:{r.port}" in paired,
             }
             for r in self.sender.network.get_discovered_receivers()
+            if not (r.host in (own_ip, "127.0.0.1", "::1") and r.port == self.port)
         ]
 
-    def apply_target(self, peer_id: str):
-        """Resolve a peer_id (host:port) to a discovered receiver and set it
-        as the sender's default upload target."""
+    def _paired_peer_ids(self) -> set:
+        """Peer IDs this machine's sender holds a token for."""
+        try:
+            return {p["peer_id"] for p in self.sender.network._pairing.list_peers()}
+        except Exception:
+            return set()
+
+    def apply_target(self, peer_id: str) -> bool:
+        """Resolve a peer_id (host:port) to a discovered or already-paired
+        receiver and set it as the sender's default upload target.
+        Returns False for unknown peers — arbitrary host:port targets are
+        not constructed."""
         if not self.sender:
-            return
+            return False
         for r in self.sender.network.get_discovered_receivers():
             if f"{r.host}:{r.port}" == peer_id:
                 self.sender.network.set_target(r)
-                return
-        host, _, port = peer_id.rpartition(":")
-        if host and port.isdigit():
-            self.sender.network.set_target(ReceiverStatus(
-                device_name=f"Receiver at {host}", host=host, port=int(port),
-            ))
+                return True
+        if peer_id in self._paired_peer_ids():
+            host, _, port = peer_id.rpartition(":")
+            if host and port.isdigit():
+                self.sender.network.set_target(ReceiverStatus(
+                    device_name=f"Receiver at {host}", host=host, port=int(port),
+                ))
+                return True
+        logger.warning(f"Rejected unknown upload target: {peer_id}")
+        return False
+
+    def pair_with_peer(self, peer_id: str, pin: str) -> bool:
+        """Pair this machine's sender with a discovered peer using its PIN.
+
+        Connects to the peer and runs the PIN pairing exchange; on success the
+        issued token is stored in the sender's PairingStore keyed by host:port."""
+        if not self.sender:
+            return False
+        for r in self.sender.network.get_discovered_receivers():
+            if f"{r.host}:{r.port}" == peer_id:
+                if not self.sender.network.connect_to_receiver(r):
+                    return False
+                return self.sender.network.pair(pin)
+        logger.warning(f"Pair requested for unknown peer: {peer_id}")
+        return False
 
     # ---- lifecycle ----
 
@@ -124,7 +156,9 @@ class AirShareApp:
             peer_provider=self.peer_list,
             target_hook=self.apply_target,
             gesture_hook=self._gesture_hook,
+            pair_hook=self.pair_with_peer,
         )
+        receiver_server.print_pin()
 
         self.start_sender()
         receiver_server.set_mode("receiver-only" if self.receiver_only else "full")
