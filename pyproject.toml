@@ -18,6 +18,9 @@ dependencies = [
     "numpy",
 ]
 
+[project.optional-dependencies]
+test = ["pytest"]
+
 [project.scripts]
 airshare = "airshare.app:main"
 
