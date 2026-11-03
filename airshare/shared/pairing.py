@@ -2,6 +2,7 @@
 import json
 import os
 import secrets
+import tempfile
 import threading
 
 DEFAULT_STORE_PATH = os.path.expanduser(os.path.join("~", ".airshare", "peers.json"))
@@ -36,9 +37,22 @@ class PairingStore:
 
     def _save(self):
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(self._peers, f, indent=2)
+        # Write to a temp file in the same directory, then atomically replace
+        # so a concurrent reader never sees a truncated file.
+        fd, tmp_path = tempfile.mkstemp(
+            dir=os.path.dirname(self.path) or ".", prefix=".peers-", suffix=".tmp",
+        )
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self._peers, f, indent=2)
+            os.replace(tmp_path, self.path)
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def get_token(self, peer_id: str) -> str | None:
         """Return the stored token for a peer, or None."""

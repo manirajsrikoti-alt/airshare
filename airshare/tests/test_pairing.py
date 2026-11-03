@@ -55,6 +55,32 @@ class TestPairingStore:
         mode = stat.S_IMODE(os.stat(self.path).st_mode)
         assert mode == 0o600
 
+    def test_atomic_save_concurrent_writers(self):
+        """Concurrent saves never corrupt the file or leave temp files behind."""
+        import json
+        import threading
+        from airshare.shared.pairing import PairingStore
+        store = PairingStore(self.path)
+
+        def writer(n):
+            for i in range(25):
+                store.add_peer(f"peer-{n}", f"Device {n}", f"token-{n}-{i}")
+
+        threads = [threading.Thread(target=writer, args=(n,)) for n in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # File is always valid JSON with the final set of peers
+        with open(self.path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        assert len(data) == 4
+        assert len(store.list_peers()) == 4
+        # No temp files left behind
+        leftovers = [f for f in os.listdir(self.tmpdir) if f.startswith(".peers-")]
+        assert leftovers == []
+
 
 class TestPairingAPI:
     """Pairing + token auth on the receiver Flask app."""
@@ -94,6 +120,14 @@ class TestPairingAPI:
     def test_pair_wrong_pin_403(self):
         resp = self._pair(pin="000000")
         assert resp.status_code == 403
+
+    def test_status_does_not_expose_pin(self):
+        """GET /api/status must not leak the pairing PIN to unauthenticated LAN clients."""
+        resp = self.client.get("/api/status")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert "pin" not in data
+        assert "123456" not in resp.get_data(as_text=True)
 
     def test_pair_correct_pin_returns_token(self):
         resp = self._pair()

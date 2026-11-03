@@ -83,7 +83,6 @@ def api_status():
     return jsonify({
         "status": "online",
         "device_name": _device_name,
-        "pin": _pin,
         "version": config.VERSION,
         "connected_senders": list(connected_senders),
         "latest_file": storage.latest_filename,
