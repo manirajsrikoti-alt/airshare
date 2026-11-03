@@ -83,8 +83,8 @@ class TestModels:
         assert gr.gesture == GestureType.NONE
 
     def test_gesture_result_detected(self):
-        """CAPTURE gesture is detected."""
-        gr = GestureResult(gesture=GestureType.CAPTURE, confidence=0.9)
+        """GRAB gesture is detected."""
+        gr = GestureResult(gesture=GestureType.GRAB, confidence=0.9)
         assert gr.detected
 
     def test_sender_state_enum(self):
@@ -93,7 +93,7 @@ class TestModels:
             "IDLE", "READY", "GESTURE_ARMED", "CAPTURE_DETECTED",
             "CAPTURING", "CAPTURED", "READY_TO_TRANSFER",
             "TRANSFER_DETECTED", "SENDING", "TRANSFER_SUCCESS",
-            "TRANSFER_FAILED", "COOLDOWN", "CALIBRATING", "CAMERA_ERROR",
+            "TRANSFER_FAILED", "CANCELLED", "COOLDOWN", "CALIBRATING", "CAMERA_ERROR",
         ]
         for name in expected:
             assert hasattr(SenderState, name)

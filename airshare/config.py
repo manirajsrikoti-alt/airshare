@@ -30,22 +30,17 @@ MAX_HANDS = 1
 MIN_DETECTION_CONFIDENCE = 0.6
 MIN_TRACKING_CONFIDENCE = 0.6
 
-# --- Gesture Thresholds ---
-# Capture gesture (upward push)
-CAPTURE_MIN_DISPLACEMENT = 0.08       # minimum palm displacement (normalized)
-CAPTURE_MIN_VELOCITY = 0.15           # minimum velocity
-CAPTURE_MIN_FRAMES = 6                # minimum frames for gesture
-CAPTURE_MAX_FRAMES = 40               # maximum frames (prevent slow drift)
-CAPTURE_MIN_DIRECTION_RATIO = 0.6     # at least 60% of movement must be upward
-CAPTURE_VELOCITY_RATIO = 0.5          # vertical velocity / total velocity
+# --- Gesture Thresholds (Huawei-style: fist-grab, flick, palm-cancel) ---
+GRAB_HOLD_FRAMES = 8                  # fist must be held this many frames for GRAB
+CANCEL_HOLD_FRAMES = 20               # open palm held this many frames for CANCEL
 
-# Transfer gesture (horizontal throw)
-TRANSFER_MIN_DISPLACEMENT = 0.10
-TRANSFER_MIN_VELOCITY = 0.18
-TRANSFER_MIN_FRAMES = 6
-TRANSFER_MAX_FRAMES = 40
-TRANSFER_MIN_DIRECTION_RATIO = 0.6    # at least 60% must be horizontal
-TRANSFER_VELOCITY_RATIO = 0.5
+# Flick gesture (fast horizontal palm movement)
+FLICK_MIN_FRAME_DISPLACEMENT = 0.04   # min per-frame horizontal delta (normalized)
+FLICK_MIN_TOTAL_DISPLACEMENT = 0.10   # min total horizontal travel (normalized)
+FLICK_WINDOW_FRAMES = 5               # frames analyzed for flick velocity
+
+# Movement below this per-frame delta counts as "held still" for CANCEL
+CANCEL_MAX_FRAME_DISPLACEMENT = 0.01
 
 # --- State Machine ---
 COOLDOWN_SECONDS = 1.5

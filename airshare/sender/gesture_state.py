@@ -16,6 +16,7 @@ _TRANSITIONS = {
     },
     SenderState.GESTURE_ARMED: {
         SenderState.CAPTURE_DETECTED,
+        SenderState.CANCELLED,
         SenderState.READY,  # arm cancelled
     },
     SenderState.CAPTURE_DETECTED: {SenderState.CAPTURING},
@@ -24,6 +25,7 @@ _TRANSITIONS = {
     SenderState.READY_TO_TRANSFER: {
         SenderState.TRANSFER_DETECTED,
         SenderState.CAPTURE_DETECTED,  # re-capture
+        SenderState.CANCELLED,
         SenderState.READY,  # cancel / timeout
     },
     SenderState.TRANSFER_DETECTED: {SenderState.SENDING, SenderState.TRANSFER_FAILED},
@@ -36,6 +38,7 @@ _TRANSITIONS = {
         SenderState.READY_TO_TRANSFER,
         SenderState.READY,
     },
+    SenderState.CANCELLED: {SenderState.READY},
     SenderState.COOLDOWN: {SenderState.READY},
     SenderState.CALIBRATING: {SenderState.READY},
     SenderState.CAMERA_ERROR: {SenderState.IDLE},

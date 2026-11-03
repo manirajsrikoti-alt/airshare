@@ -18,16 +18,18 @@ class SenderState(Enum):
     SENDING = auto()
     TRANSFER_SUCCESS = auto()
     TRANSFER_FAILED = auto()
+    CANCELLED = auto()
     COOLDOWN = auto()
     CALIBRATING = auto()
     CAMERA_ERROR = auto()
 
 
 class GestureType(Enum):
-    """Detected gesture types."""
+    """Detected gesture types (Huawei-style set)."""
     NONE = auto()
-    CAPTURE = auto()      # upward push
-    TRANSFER = auto()     # horizontal throw
+    GRAB = auto()       # open -> fist grab, held
+    FLICK = auto()      # fast horizontal palm movement
+    CANCEL = auto()     # open palm held still
 
 
 @dataclass
@@ -37,6 +39,7 @@ class HandData:
     palm_center: Tuple[float, float] = (0.5, 0.5)
     wrist: Tuple[float, float] = (0.5, 0.5)
     index_tip: Tuple[float, float] = (0.5, 0.5)
+    is_fist: bool = False
     landmarks: list = field(default_factory=list)  # 21 landmarks as (x, y, z)
     bbox: Tuple[int, int, int, int] = (0, 0, 0, 0)  # x, y, w, h in pixels
     timestamp: float = field(default_factory=time.time)

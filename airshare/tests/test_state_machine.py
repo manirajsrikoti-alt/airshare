@@ -109,3 +109,23 @@ class TestGestureStateMachine:
         self.sm.force_state(SenderState.READY_TO_TRANSFER)
         assert self.sm.transition(SenderState.CAPTURE_DETECTED)
         assert self.sm.state == SenderState.CAPTURE_DETECTED
+
+    def test_cancel_from_transfer_ready(self):
+        """Palm-cancel from READY_TO_TRANSFER goes to CANCELLED then READY."""
+        self.sm.force_state(SenderState.READY_TO_TRANSFER)
+        assert self.sm.transition(SenderState.CANCELLED)
+        assert self.sm.state == SenderState.CANCELLED
+        assert self.sm.transition(SenderState.READY)
+        assert self.sm.state == SenderState.READY
+
+    def test_cancel_from_gesture_armed(self):
+        """Palm-cancel from GESTURE_ARMED goes to CANCELLED."""
+        self.sm.force_state(SenderState.GESTURE_ARMED)
+        assert self.sm.transition(SenderState.CANCELLED)
+        assert self.sm.state == SenderState.CANCELLED
+
+    def test_cancel_not_allowed_while_sending(self):
+        """Cannot palm-cancel mid-transfer."""
+        self.sm.force_state(SenderState.SENDING)
+        assert not self.sm.transition(SenderState.CANCELLED)
+        assert self.sm.state == SenderState.SENDING

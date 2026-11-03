@@ -158,7 +158,7 @@ class AirShareSender:
             if self._calibration_mode:
                 frame = self.overlay.draw_calibrating(
                     frame,
-                    "UPWARD PUSH" if len(self._calibration_samples) < self._calibration_target else "OUTWARD THROW",
+                    "FIST GRAB" if len(self._calibration_samples) < self._calibration_target else "FLICK",
                     len(self._calibration_samples),
                     self._calibration_target * 2,
                 )
@@ -200,13 +200,18 @@ class AirShareSender:
 
     def _handle_gesture(self, result):
         """Handle gesture detection results with state machine."""
-        if result.gesture == GestureType.CAPTURE and result.confidence >= 0.5:
+        if result.gesture == GestureType.GRAB and result.confidence >= 0.5:
             if self.state.transition(SenderState.CAPTURE_DETECTED):
                 self._perform_capture()
-        elif result.gesture == GestureType.TRANSFER and result.confidence >= 0.5:
+        elif result.gesture == GestureType.FLICK and result.confidence >= 0.5:
             if self.state.state == SenderState.READY_TO_TRANSFER:
                 if self.state.transition(SenderState.TRANSFER_DETECTED):
                     self._perform_transfer()
+        elif result.gesture == GestureType.CANCEL and result.confidence >= 0.5:
+            if self.state.transition(SenderState.CANCELLED):
+                logger.info("Gesture cancelled by open palm")
+                self.gesture.reset()
+                self.state.transition(SenderState.READY)
 
     def _perform_capture(self):
         """Capture a screenshot."""

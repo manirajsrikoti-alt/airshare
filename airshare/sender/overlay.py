@@ -32,6 +32,7 @@ _STATE_DISPLAY = {
     SenderState.SENDING: ("→ SENDING...", COLOR_BLUE),
     SenderState.TRANSFER_SUCCESS: ("✓ SENT!", COLOR_GREEN),
     SenderState.TRANSFER_FAILED: ("✗ FAILED", COLOR_RED),
+    SenderState.CANCELLED: ("✋ CANCELLED", COLOR_DIM),
     SenderState.COOLDOWN: ("COOLDOWN...", COLOR_DIM),
     SenderState.CALIBRATING: ("CALIBRATING", COLOR_ACCENT),
     SenderState.CAMERA_ERROR: ("CAMERA ERROR", COLOR_RED),
@@ -39,8 +40,9 @@ _STATE_DISPLAY = {
 
 _GESTURE_DISPLAY = {
     GestureType.NONE: ("—", COLOR_DIM),
-    GestureType.CAPTURE: ("↑ PUSH", COLOR_BLUE),
-    GestureType.TRANSFER: ("→ THROW", COLOR_ACCENT),
+    GestureType.GRAB: ("✊ GRAB", COLOR_BLUE),
+    GestureType.FLICK: ("→ FLICK", COLOR_ACCENT),
+    GestureType.CANCEL: ("✋ CANCEL", COLOR_RED),
 }
 
 
@@ -209,7 +211,7 @@ class Overlay:
                       (10, 10, 10), -1)
         frame[:] = cv2.addWeighted(overlay, 0.75, frame, 0.25, 0)
 
-        text = "✋ Throw outward to transfer screenshot"
+        text = "→ Flick to transfer screenshot"
         cv2.putText(frame, text, (16, y_start + 32),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_ACCENT, 1, cv2.LINE_AA)
 

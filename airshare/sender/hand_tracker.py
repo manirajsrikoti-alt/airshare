@@ -87,9 +87,20 @@ class HandTracker:
             palm_center=(palm_x, palm_y),
             wrist=wrist,
             index_tip=index_tip,
+            is_fist=self._detect_fist(all_landmarks),
             landmarks=all_landmarks,
             bbox=bbox,
         )
+
+    @staticmethod
+    def _detect_fist(landmarks) -> bool:
+        """Fist = all four fingertips curled below their PIP joints (image y grows downward)."""
+        if len(landmarks) < 21:
+            return False
+        tips = (8, 12, 16, 20)
+        pips = (6, 10, 14, 18)
+        return all(landmarks[tip][1] > landmarks[pip][1]
+                   for tip, pip in zip(tips, pips))
 
     def draw_landmarks(self, frame_bgr: np.ndarray, hand_data: HandData) -> np.ndarray:
         """Draw hand landmarks on a BGR frame for debug display."""
