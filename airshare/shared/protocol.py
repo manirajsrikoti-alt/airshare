@@ -41,6 +41,7 @@ class ReceiverStatus:
     port: int = field(default_factory=lambda: config.RECEIVER_PORT)
     host: str = ""
     version: str = "1.0.0"
+    last_seen: float = field(default_factory=time.time)
 
     @property
     def url(self) -> str:

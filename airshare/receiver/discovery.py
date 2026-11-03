@@ -91,11 +91,11 @@ class DiscoveryListener:
     @property
     def receivers(self) -> list[ReceiverStatus]:
         """List of discovered receivers."""
-        # Filter out stale entries (> 10 seconds old)
+        # Filter out stale entries
         now = time.time()
         return [
             r for r in self._receivers.values()
-            if now - r.host < 30  # We use host field temporarily for last_seen
+            if now - r.last_seen < config.PEER_STALE_TIMEOUT
         ]
 
     def _listen_loop(self):

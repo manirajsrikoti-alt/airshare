@@ -27,6 +27,10 @@ class NetworkClient:
         self._token: Optional[str] = self._pairing.get_token(self._device_id)
         self._upload_callback: Optional[Callable] = None
         self._on_discovery_callback: Optional[Callable] = None
+        self._target: Optional[ReceiverStatus] = None
+        self._on_reconnect_callback: Optional[Callable] = None
+        self._reconnect_running = False
+        self._reconnect_thread: Optional[threading.Thread] = None
 
         self._listener.set_callback(self._on_receiver_discovered)
 
@@ -58,6 +62,7 @@ class NetworkClient:
             resp = requests.get(f"{receiver.url}/api/status", timeout=config.HTTP_TIMEOUT)
             if resp.status_code == 200:
                 self._connected_receiver = receiver
+                self._target = receiver
                 logger.info(f"Connected to receiver: {receiver.device_name}")
                 return True
         except Exception as e:
@@ -76,6 +81,7 @@ class NetworkClient:
     def set_target(self, peer: ReceiverStatus):
         """Set the default upload target without a connectivity check."""
         self._connected_receiver = peer
+        self._target = peer
         logger.info(f"Upload target set: {peer.device_name} at {peer.host}:{peer.port}")
 
     def disconnect(self):
@@ -95,6 +101,61 @@ class NetworkClient:
     @property
     def receiver(self) -> Optional[ReceiverStatus]:
         return self._connected_receiver
+
+    def set_reconnect_callback(self, callback: Optional[Callable]):
+        """Set a callback fired with the ReceiverStatus when a reconnect succeeds."""
+        self._on_reconnect_callback = callback
+
+    def _find_fresh_receiver(self, target: ReceiverStatus) -> Optional[ReceiverStatus]:
+        """Find a non-stale discovered receiver matching the target's host/port."""
+        for r in self._listener.receivers:
+            if r.host == target.host and r.port == target.port:
+                return r
+        for r in self._discovered.values():
+            if r.host == target.host and r.port == target.port:
+                return r
+        return None
+
+    def attempt_reconnect(self) -> bool:
+        """Try once to reconnect to the last target. Returns True on success."""
+        if self._connected_receiver is not None or self._target is None:
+            return self._connected_receiver is not None
+        match = self._find_fresh_receiver(self._target)
+        if not match:
+            return False
+        self._connected_receiver = match
+        logger.info(f"Reconnected to receiver: {match.device_name} at {match.host}:{match.port}")
+        if self._on_reconnect_callback:
+            self._on_reconnect_callback(match)
+        return True
+
+    def start_reconnect(self, callback: Optional[Callable] = None):
+        """Start the background reconnect loop."""
+        if callback is not None:
+            self.set_reconnect_callback(callback)
+        if self._reconnect_running:
+            return
+        self._reconnect_running = True
+        self._reconnect_thread = threading.Thread(target=self._reconnect_loop, daemon=True)
+        self._reconnect_thread.start()
+        logger.info("Reconnect loop started")
+
+    def stop_reconnect(self):
+        """Stop the background reconnect loop."""
+        self._reconnect_running = False
+        if self._reconnect_thread:
+            self._reconnect_thread.join(timeout=3)
+            self._reconnect_thread = None
+        logger.info("Reconnect loop stopped")
+
+    def _reconnect_loop(self):
+        while self._reconnect_running:
+            try:
+                if self._connected_receiver is None and self._target is not None:
+                    self.attempt_reconnect()
+            except Exception as e:
+                logger.debug(f"Reconnect check error: {e}")
+            time.sleep(config.RECONNECT_INTERVAL)
 
     def pair(self, pin: str) -> bool:
         """Pair with the connected receiver using its 6-digit PIN.
@@ -136,6 +197,36 @@ class NetworkClient:
         if not self._connected_receiver:
             return TransferResponse(success=False, error="No receiver connected")
 
+        attempts = 1 + config.UPLOAD_RETRIES
+        for attempt in range(attempts):
+            try:
+                return self._post_upload(file_data, filename, sender_name, callback)
+            except requests.exceptions.ConnectionError:
+                logger.error(
+                    f"Connection refused - receiver unavailable "
+                    f"(attempt {attempt + 1}/{attempts})"
+                )
+                if attempt + 1 < attempts:
+                    self._rediscover_target()
+        error = "Connection refused - receiver unavailable"
+        response = TransferResponse(success=False, error=error)
+        if callback:
+            callback(False, response)
+        return response
+
+    def _rediscover_target(self):
+        """Refresh the connection from discovery before a retry."""
+        if self._target is None:
+            return
+        match = self._find_fresh_receiver(self._target)
+        if match:
+            self._connected_receiver = match
+            logger.info(f"Re-discovered receiver at {match.host}:{match.port}")
+
+    def _post_upload(self, file_data: bytes, filename: str,
+                     sender_name: str,
+                     callback: Optional[Callable]) -> TransferResponse:
+        """Single upload attempt against the connected receiver."""
         url = f"{self._connected_receiver.url}/api/upload"
 
         try:
@@ -173,9 +264,7 @@ class NetworkClient:
                 return response
 
         except requests.exceptions.ConnectionError:
-            error = "Connection refused - receiver unavailable"
-            logger.error(error)
-            return TransferResponse(success=False, error=error)
+            raise  # handled by the retry loop in upload_screenshot
         except requests.exceptions.Timeout:
             error = "Transfer timed out"
             logger.error(error)

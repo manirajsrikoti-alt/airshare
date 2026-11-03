@@ -68,6 +68,9 @@ MOVEMENT_HISTORY_LENGTH = 30
 # --- Network ---
 TRANSFER_TIMEOUT = 30  # seconds
 HTTP_TIMEOUT = 15
+UPLOAD_RETRIES = 1          # extra upload attempts after a ConnectionError
+RECONNECT_INTERVAL = 5      # seconds between background reconnect checks
+PEER_STALE_TIMEOUT = 30     # drop discovered receivers not seen for this long
 
 # --- Paths ---
 CALIBRATION_FILE = os.path.join(os.path.dirname(__file__), ".calibration.json")
